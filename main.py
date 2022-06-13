@@ -13,7 +13,7 @@ def reply(update, context):
 
 
 def main():
-    updater = Updater('5535035149:AAFxgZWmLAIPnvGUP_dJ_I8xmT68w6nafJw')
+    updater = Updater('TOKEN')
     dp = updater.dispatcher
     text_handler = MessageHandler((Filters.text | Filters.photo), reply)
     dp.add_handler(text_handler)
