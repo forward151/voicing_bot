@@ -1,5 +1,6 @@
 from telegram.ext import Updater, MessageHandler, Filters, ChatMemberHandler
 from translating import translate_text
+from dotenv import dotenv_values
 import os
 
 def is_text(caption, text):
@@ -30,7 +31,8 @@ def reply(update, context):
 
 
 def main():
-    updater = Updater('')
+    keys = dotenv_values('.env')
+    updater = Updater(keys['TELEGRAM_KEY'])
     dp = updater.dispatcher
     text_handler = MessageHandler((Filters.text | Filters.photo), reply)
     dp.add_handler(text_handler)
