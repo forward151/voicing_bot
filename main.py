@@ -1,6 +1,7 @@
 import telegram
 from telegram.ext import Updater, MessageHandler, Filters
 from translating import translate_text
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from dotenv import dotenv_values
 import os
 from datetime import datetime
@@ -38,7 +39,7 @@ def create_token(filename):
 
 def reply(update, context):
     upd_ch_post = update.channel_post  # создаем переменную поста
-    if upd_ch_post is None:
+    if upd_ch_post is None:  # Если сообщение пришло из чата, то ничего не делаем
         return
     caption = upd_ch_post.caption  # читаем подпись и текст
     text = upd_ch_post.text
@@ -50,7 +51,7 @@ def reply(update, context):
     if result:  # если в результате что-то есть
         filename = translate_text(result, engine, iam_token, folder_id)  # создаем файлс озвучкой и возвращаем имя
         with open(filename, 'rb') as file:  # открываем файл
-            upd_ch_post.reply_audio(file)  # отсылаем голос
+            upd_ch_post.reply_text('.', reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='hello', callback_data=file)]]))  # отсылаем голос
         os.remove(filename)  # удаляем файл, чтобы не засорять память
 
 
