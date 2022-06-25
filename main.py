@@ -1,11 +1,13 @@
 import telegram
-from telegram.ext import Updater, MessageHandler, Filters
+from telegram.ext import Updater, MessageHandler, Filters, CallbackQueryHandler
 from translating import translate_text
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from dotenv import dotenv_values
 import os
 from datetime import datetime
 from token_generate import generate_token
+from telegram.error import BadRequest
+import re
 
 
 def is_caption_or_text(caption, text):
@@ -37,9 +39,11 @@ def create_token(filename):
         return iam_token, folder_id  # выводим
 
 
-def reply(update, context):
+def adj_reply(update, context):
     upd_ch_post = update.channel_post  # создаем переменную поста
+    upd_mes = update.message
     if upd_ch_post is None:  # Если сообщение пришло из чата, то ничего не делаем
+        upd_mes.reply_text('Бот успешно запущен')
         return
     caption = upd_ch_post.caption  # читаем подпись и текст
     text = upd_ch_post.text
@@ -49,11 +53,54 @@ def reply(update, context):
     engine = 'yandex'  # выбираем движок
 
     if result:  # если в результате что-то есть
-        filename = translate_text(result, engine, iam_token, folder_id)  # создаем файлс озвучкой и возвращаем имя
-        with open(filename, 'rb') as file:  # открываем файл
-            upd_ch_post.reply_text('.', reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='hello', callback_data=file)]]))  # отсылаем голос
-        os.remove(filename)  # удаляем файл, чтобы не засорять память
+        if re.search(r'\w', text) is not None:
+            filename = translate_text(result, engine, iam_token, folder_id)  # создаем файлс озвучкой и возвращаем имя
+            with open(filename, 'rb') as file:  # открываем файл
+                upd_ch_post.reply_audio(file)  # отсылаем голос
+            os.remove(filename)  # удаляем файл, чтобы не засорять память
 
+
+def sep_reply(update, context):
+    upd_ch_post = update.channel_post
+    upd_mes = update.message
+    if upd_ch_post is None:  # Если сообщение пришло из чата, то ничего не делаем
+        upd_mes.reply_text('Бот успешно запущен')
+        return
+
+    if re.search(r'\w', upd_ch_post.text) is not None:
+        keyboard = [
+                    [InlineKeyboardButton("Получить аудио", callback_data='Получить аудио')]
+                ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        message_reply_text = 'Получить аудио'
+        upd_ch_post.reply_text(message_reply_text, reply_markup=reply_markup)
+
+
+def call_back(update, context):
+    upd_call_q = update.callback_query
+    cont_bot = context.bot
+
+    id = upd_call_q.from_user['id']
+
+    try:
+        caption = update.callback_query.message.reply_to_message.caption  # читаем подпись и текст
+    except BadRequest:
+        caption = None
+    try:
+        text = update.callback_query.message.reply_to_message.text  # читаем подпись и текст
+    except BadRequest:
+        text = None
+
+    result = is_caption_or_text(caption, text)  # смотрим результат
+    iam_token, folder_id = create_token('iam_token.txt')  # генерируем token и folder_id
+    engine = 'yandex'  # выбираем движок
+
+    if result:  # если в результате что-то есть
+        if re.search(r'\w', text) is not None:
+            filename = translate_text(result, engine, iam_token, folder_id)  # создаем файлс озвучкой и возвращаем имя
+            with open(filename, 'rb') as file:  # открываем файл
+                cont_bot.send_audio(chat_id=id, audio=file)  # отсылаем голос
+            os.remove(filename)  # удаляем файл, чтобы не засорять память
 
 def main():
     print('Start initialization...')
@@ -64,8 +111,15 @@ def main():
         updater = Updater(telegram_token)  # подключаем updater
         print('Token is correct')
         dp = updater.dispatcher  # связываем с диспетчером
-        text_handler = MessageHandler((Filters.text | Filters.photo), reply)  # объявляем вызов по сообщению
-        dp.add_handler(text_handler)  # добавляем вызов
+        mode = 'separate'
+        if mode == 'separate':
+            text_handler = MessageHandler((Filters.text | Filters.photo), sep_reply)  # объявляем вызов по сообщению
+            dp.add_handler(text_handler)  # добавляем вызов
+        elif mode == 'adjacent':
+            text_handler = MessageHandler((Filters.text | Filters.photo), adj_reply)  # объявляем вызов по сообщению
+            dp.add_handler(text_handler)  # добавляем вызов
+
+        updater.dispatcher.add_handler(CallbackQueryHandler(call_back))
         print('Initialization completed successfully')
         print('Start working')
         updater.start_polling()  # начинаем опрос
