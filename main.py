@@ -27,13 +27,13 @@ def create_token(filename):
     dt = text[1]  # берем время из файла
     old_time = datetime.strptime(dt, "%d.%m.%Y %H:%M")  # смотрим его
     new_time = datetime.now()  # берем текущее время
-    if (new_time - old_time).seconds > 3600:  # если разница больше часа
+    if (new_time - old_time).total_seconds() > 3600:  # если разница больше часа
         iam_token = generate_token()  # генерируем новый токен
         text[0] = iam_token  # заменяем старый токен
-        text[1] = f'{new_time.day}.{new_time.month}.{new_time.year} {new_time.hour}:{new_time.minute}'  # заменяем старое время
+        text[1] = f'{new_time.day}.{ new_time.month}.{new_time.year} {new_time.hour}:{new_time.minute}'  # заменяем старое время
         with open(filename, 'w') as file:  # записываем в файл
             file.write('\n'.join(text))
-        return iam_token, folder_id  # выводим token и folder_id
+        return iam_token, folder_id  # выводим tok en и folder_id
     else:
         iam_token = text[0]  # иначе берем старый token
         return iam_token, folder_id  # выводим
@@ -42,8 +42,11 @@ def create_token(filename):
 def adj_reply(update, context):
     upd_ch_post = update.channel_post  # создаем переменную поста
     upd_mes = update.message
-    if upd_ch_post is None:  # Если сообщение пришло из чата, то ничего не делаем
+    if upd_ch_post is None and upd_mes.text == '/start':  # Если сообщение пришло из чата, то ничего не делаем
         upd_mes.reply_text('Бот успешно запущен')
+        return
+    if upd_ch_post is None and upd_mes is not None:
+        pers_reply(update, context)
         return
     caption = upd_ch_post.caption  # читаем подпись и текст
     text = upd_ch_post.text
@@ -60,12 +63,39 @@ def adj_reply(update, context):
             os.remove(filename)  # удаляем файл, чтобы не засорять память
 
 
+def pers_reply(update, context):
+    upd_mes = update.message
+    if upd_mes is None:  # Если сообщение пришло из чата, то ничего не делаем
+        return
+    elif upd_mes.text == '/start':
+        upd_mes.reply_text('Бот успешно запущен')
+        return
+    caption = upd_mes.caption  # читаем подпись и текст
+    text = upd_mes.text
+
+    result = is_caption_or_text(caption, text)  # смотрим результат
+    iam_token, folder_id = create_token('iam_token.txt')  # генерируем token и folder_id
+    engine = 'yandex'  # выбираем движок
+
+    if result:  # если в результате что-то есть
+        if re.search(r'\w', text) is not None:
+            filename = translate_text(result, engine, iam_token, folder_id)  # создаем файлс озвучкой и возвращаем имя
+            with open(filename, 'rb') as file:  # открываем файл
+                upd_mes.reply_audio(file)  # отсылаем голос
+            os.remove(filename)  # удаляем файл, чтобы не засорять память
+
+
 def sep_reply(update, context):
     upd_ch_post = update.channel_post
     upd_mes = update.message
-    if upd_ch_post is None:  # Если сообщение пришло из чата, то ничего не делаем
+    if upd_ch_post is None and upd_mes.text == '/start':  # Если сообщение пришло из чата, то ничего не делаем
         upd_mes.reply_text('Бот успешно запущен')
         return
+
+    if upd_ch_post is None and upd_mes is not None:
+        pers_reply(update, context)
+        return
+
 
     if re.search(r'\w', upd_ch_post.text) is not None:
         keyboard = [
@@ -118,7 +148,6 @@ def main():
         elif mode == 'adjacent':
             text_handler = MessageHandler((Filters.text | Filters.photo), adj_reply)  # объявляем вызов по сообщению
             dp.add_handler(text_handler)  # добавляем вызов
-
         updater.dispatcher.add_handler(CallbackQueryHandler(call_back))
         print('Initialization completed successfully')
         print('Start working')
